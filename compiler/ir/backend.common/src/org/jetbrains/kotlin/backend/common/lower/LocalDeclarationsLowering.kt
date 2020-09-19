@@ -120,7 +120,8 @@ class LocalDeclarationsLowering(
 
     private abstract class LocalContext {
         val capturedTypeParameterToTypeParameter: MutableMap<IrTypeParameter, IrTypeParameter> = mutableMapOf()
-        lateinit var typeRemapper: IrTypeParameterRemapper
+        // By the time typeRemapper is used, the map will be already filled
+        val typeRemapper = IrTypeParameterRemapper(capturedTypeParameterToTypeParameter)
 
         /**
          * @return the expression to get the value for given declaration, or `null` if [IrGetValue] should be used.
@@ -595,7 +596,6 @@ class LocalDeclarationsLowering(
             localFunctionContext.capturedTypeParameterToTypeParameter.putAll(
                 oldDeclaration.typeParameters.zip(newDeclaration.typeParameters.drop(newTypeParameters.size))
             )
-            localFunctionContext.typeRemapper = IrTypeParameterRemapper(localFunctionContext.capturedTypeParameterToTypeParameter)
 
             // Type parameters of oldDeclaration may depend on captured type parameters, so deal with that after copying.
             newDeclaration.typeParameters.drop(newTypeParameters.size).forEach { tp ->
