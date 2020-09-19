@@ -8,6 +8,10 @@ package org.jetbrains.kotlin.findUsages
 import org.jetbrains.kotlin.idea.test.PluginTestCaseBase
 import org.jetbrains.kotlin.idea.test.SdkAndMockLibraryProjectDescriptor
 
+abstract class AbstractKotlinFindUsagesWithLibraryFirTest : AbstractKotlinFindUsagesWithLibraryTest() {
+    override fun isFirPlugin(): Boolean = true
+}
+
 abstract class AbstractKotlinFindUsagesWithLibraryTest : AbstractFindUsagesTest() {
     override fun getProjectDescriptor() =
         SdkAndMockLibraryProjectDescriptor(

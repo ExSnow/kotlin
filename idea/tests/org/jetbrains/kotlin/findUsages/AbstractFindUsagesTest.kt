@@ -14,6 +14,8 @@ import com.intellij.find.findUsages.JavaFindUsagesHandlerFactory
 import com.intellij.find.impl.FindManagerImpl
 import com.intellij.lang.properties.psi.PropertiesFile
 import com.intellij.lang.properties.psi.Property
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.editor.markup.TextAttributes
 import com.intellij.openapi.extensions.Extensions
 import com.intellij.openapi.progress.ProgressIndicator
@@ -59,6 +61,17 @@ import org.jetbrains.kotlin.test.KotlinTestUtils
 import java.io.File
 import java.util.*
 import kotlin.collections.LinkedHashSet
+
+private fun <R> executeOnPooledThreadInReadAction(action: () -> R): R = action()
+    //ApplicationManager.getApplication().executeOnPooledThread<R> { runReadAction(action) }.get()
+
+abstract class AbstractFindUsagesWithDisableComponentSearchFirTest : AbstractFindUsagesWithDisableComponentSearchTest() {
+    override fun isFirPlugin(): Boolean = true
+}
+
+abstract class AbstractFindUsagesFirTest : AbstractFindUsagesTest() {
+    override fun isFirPlugin(): Boolean = true
+}
 
 abstract class AbstractFindUsagesWithDisableComponentSearchTest : AbstractFindUsagesTest() {
 
@@ -139,17 +152,23 @@ abstract class AbstractFindUsagesTest : KotlinLightCodeInsightFixtureTestCase() 
                 ScriptConfigurationManager.updateScriptDependenciesSynchronously(myFixture.file)
             }
 
-            (myFixture.file as? KtFile)?.let { ktFile ->
-                val diagnosticsProvider: (KtFile) -> Diagnostics = { it.analyzeWithAllCompilerChecks().bindingContext.diagnostics }
-                DirectiveBasedActionUtils.checkForUnexpectedWarnings(ktFile, diagnosticsProvider)
-                DirectiveBasedActionUtils.checkForUnexpectedErrors(ktFile, diagnosticsProvider)
+            if (!isFirPlugin) {
+                (myFixture.file as? KtFile)?.let { ktFile ->
+                    val diagnosticsProvider: (KtFile) -> Diagnostics = { it.analyzeWithAllCompilerChecks().bindingContext.diagnostics }
+                    DirectiveBasedActionUtils.checkForUnexpectedWarnings(ktFile, diagnosticsProvider)
+                    DirectiveBasedActionUtils.checkForUnexpectedErrors(ktFile, diagnosticsProvider)
+                }
             }
 
             val caretElement = when {
-                InTextDirectivesUtils.isDirectiveDefined(mainFileText, "// FIND_BY_REF") -> TargetElementUtil.findTargetElement(
-                    myFixture.editor,
-                    TargetElementUtil.REFERENCED_ELEMENT_ACCEPTED or TargetElementUtil.getInstance().referenceSearchFlags
-                )!!
+                InTextDirectivesUtils.isDirectiveDefined(mainFileText, "// FIND_BY_REF") -> {
+                    executeOnPooledThreadInReadAction {
+                        TargetElementUtil.findTargetElement(
+                            myFixture.editor,
+                            TargetElementUtil.REFERENCED_ELEMENT_ACCEPTED or TargetElementUtil.getInstance().referenceSearchFlags
+                        )!!
+                    }
+                }
 
                 isFindFileUsages -> myFixture.file
 
@@ -166,14 +185,20 @@ abstract class AbstractFindUsagesTest : KotlinLightCodeInsightFixtureTestCase() 
             val prefixForCheck = prefix + prefixForResults
             if (isLibraryElement) {
                 val originalElement = caretElement.originalElement
-                findUsagesAndCheckResults(mainFileText, prefixForCheck, rootPath, originalElement, options, project)
+                executeOnPooledThreadInReadAction {
+                    findUsagesAndCheckResults(mainFileText, prefixForCheck, rootPath, originalElement, options, project)
+                }
 
                 val navigationElement = caretElement.navigationElement
                 if (navigationElement !== originalElement) {
-                    findUsagesAndCheckResults(mainFileText, prefixForCheck, rootPath, navigationElement, options, project)
+                    executeOnPooledThreadInReadAction {
+                        findUsagesAndCheckResults(mainFileText, prefixForCheck, rootPath, navigationElement, options, project)
+                    }
                 }
             } else {
-                findUsagesAndCheckResults(mainFileText, prefixForCheck, rootPath, caretElement, options, project)
+                executeOnPooledThreadInReadAction {
+                    findUsagesAndCheckResults(mainFileText, prefixForCheck, rootPath, caretElement, options, project)
+                }
             }
         } finally {
             fixtureClasses.forEach { TestFixtureExtension.unloadFixture(it) }

@@ -15,9 +15,14 @@ import org.jetbrains.kotlin.test.InTextDirectivesUtils
 
 abstract class AbstractFindUsagesMultiModuleTest : AbstractMultiModuleTest() {
 
+    protected open val isFirTest: Boolean = false
+
     override fun getTestDataPath() = PluginTestCaseBase.getTestDataPathBase() + "/multiModuleFindUsages/"
 
     protected fun doFindUsagesTest() {
+
+        if (isFirTest) return
+
         val allFilesInProject = project.allKotlinFiles()
         val mainFile = allFilesInProject.single { file ->
             file.text.contains("// ")
